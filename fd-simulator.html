@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FD SIMULATOR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     FD SIMULATOR
+     ------------------------------------------------------------
+     ★ EDIT THE TARGET LIST BELOW IN THE <script> SECTION ★
+     Search for "GENERIC_TARGETS" near the top of the script.
+     Replace those placeholder names with whatever you like —
+     that's the only thing you need to touch to make this yours.
+     ============================================================ */
+
+  :root{
+    --bg:            #05070a;
+    --panel:         #0b1310;
+    --panel-raised:  #0f1b16;
+    --grid:          #17281f;
+    --amber:         #ffb400;
+    --amber-dim:     #7a5a10;
+    --phosphor:      #3ef07a;
+    --phosphor-dim:  #1c5c38;
+    --red:           #ff3b3b;
+    --red-dim:       #5c1414;
+    --ink:           #cfe8d6;
+    --ink-dim:       #6b8f74;
+    --mono: 'Share Tech Mono', monospace;
+    --head: 'Rajdhani', sans-serif;
+    --stencil: 'Black Ops One', sans-serif;
+  }
+
+  * { box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:
+      radial-gradient(ellipse at 50% 0%, #0c1712 0%, var(--bg) 60%);
+    color:var(--ink);
+    font-family:var(--mono);
+    overflow-x:hidden;
+  }
+
+  /* scanline / CRT overlay */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    pointer-events:none;
+    z-index:999;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.12) 3px
+    );
+    mix-blend-mode:multiply;
+  }
+  body::after{
+    content:"";
+    position:fixed; inset:0;
+    pointer-events:none;
+    z-index:998;
+    background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
+  }
+
+  ::selection{ background:var(--amber); color:#000; }
+
+  /* ---------- top bar ---------- */
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:14px 22px;
+    border-bottom:1px solid var(--grid);
+    background:linear-gradient(180deg, #0a120d, #060a08);
+    flex-wrap:wrap;
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:14px;
+  }
+  .brand h1{
+    font-family:var(--stencil);
+    font-size:22px;
+    letter-spacing:2px;
+    color:var(--amber);
+    margin:0;
+    text-shadow:0 0 14px rgba(255,180,0,0.35);
+  }
+  .brand .sub{
+    font-family:var(--head);
+    font-size:12px;
+    letter-spacing:3px;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+  }
+  .hdr-right{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .status-pill{
+    font-family:var(--head);
+    font-weight:700;
+    font-size:12px;
+    letter-spacing:2px;
+    padding:6px 12px;
+    border:1px solid var(--phosphor-dim);
+    color:var(--phosphor);
+    border-radius:2px;
+    display:flex; align-items:center; gap:8px;
+    text-transform:uppercase;
+  }
+  .status-pill .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--phosphor);
+    box-shadow:0 0 8px var(--phosphor);
+    animation:blink 1.4s infinite;
+  }
+  @keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.25} }
+  #clock{ font-size:13px; color:var(--ink-dim); letter-spacing:1px; }
+  .btn-ghost{
+    background:transparent;
+    border:1px solid var(--grid);
+    color:var(--ink-dim);
+    font-family:var(--head);
+    font-size:11px;
+    letter-spacing:1.5px;
+    padding:7px 10px;
+    border-radius:2px;
+    cursor:pointer;
+    text-transform:uppercase;
+  }
+  .btn-ghost:hover{ border-color:var(--amber-dim); color:var(--amber); }
+
+  /* ---------- layout ---------- */
+  main{
+    display:grid;
+    grid-template-columns: 1fr 340px 300px;
+    gap:16px;
+    padding:18px 22px;
+    max-width:1500px;
+    margin:0 auto;
+  }
+  @media (max-width:1100px){
+    main{ grid-template-columns:1fr; }
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--grid);
+    border-radius:3px;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .panel-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px;
+    border-bottom:1px solid var(--grid);
+    font-family:var(--head);
+    font-weight:700;
+    font-size:12px;
+    letter-spacing:2.5px;
+    color:var(--ink-dim);
+    text-transform:uppercase;
+  }
+  .panel-head span.count{
+    color:var(--amber);
+    font-family:var(--mono);
+    letter-spacing:0;
+  }
+
+  /* ---------- radar ---------- */
+  .radar-wrap{
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+  }
+  .radar-scope{
+    position:relative;
+    width:100%;
+    max-width:460px;
+    aspect-ratio:1/1;
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(62,240,122,0.06), transparent 70%),
+      #04100a;
+    border:2px solid var(--phosphor-dim);
+    box-shadow:
+      inset 0 0 40px rgba(62,240,122,0.15),
+      0 0 30px rgba(0,0,0,0.6);
+    overflow:hidden;
+  }
+  .ring{
+    position:absolute; border:1px solid rgba(62,240,122,0.18); border-radius:50%;
+    top:50%; left:50%; transform:translate(-50%,-50%);
+  }
+  .ring.r1{ width:25%; height:25%; }
+  .ring.r2{ width:50%; height:50%; }
+  .ring.r3{ width:75%; height:75%; }
+  .ring.r4{ width:100%; height:100%; }
+  .crosshair{
+    position:absolute; background:rgba(62,240,122,0.18);
+  }
+  .crosshair.h{ top:50%; left:0; width:100%; height:1px; transform:translateY(-50%); }
+  .crosshair.v{ left:50%; top:0; height:100%; width:1px; transform:translateX(-50%); }
+
+  .sweep{
+    position:absolute; inset:0;
+    border-radius:50%;
+    background:conic-gradient(from 0deg, rgba(62,240,122,0.55) 0deg, rgba(62,240,122,0) 45deg, rgba(62,240,122,0) 360deg);
+    animation:spin 4s linear infinite;
+    mix-blend-mode:screen;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .blip{
+    position:absolute;
+    width:9px; height:9px;
+    border-radius:50%;
+    background:var(--amber);
+    box-shadow:0 0 10px var(--amber), 0 0 2px #fff;
+    transform:translate(-50%,-50%);
+    cursor:pointer;
+    animation:blipIn .4s ease-out;
+  }
+  .blip::after{
+    content:"";
+    position:absolute; inset:-8px;
+    border-radius:50%;
+    border:1px solid var(--amber);
+    opacity:0;
+    animation:ping 1.8s ease-out infinite;
+  }
+  .blip.neutralized{ background:var(--ink-dim); box-shadow:none; animation:none; }
+  .blip.neutralized::after{ display:none; }
+  .blip.selected{ background:var(--red); box-shadow:0 0 14px var(--red); }
+  @keyframes blipIn{ from{ transform:translate(-50%,-50%) scale(0); opacity:0;} to{ transform:translate(-50%,-50%) scale(1); opacity:1;} }
+  @keyframes ping{ 0%{ transform:scale(0.6); opacity:.9;} 100%{ transform:scale(2.4); opacity:0; } }
+
+  .radar-readout{
+    display:flex; gap:20px; font-size:11px; color:var(--ink-dim);
+    letter-spacing:1px; flex-wrap:wrap; justify-content:center;
+  }
+  .radar-readout b{ color:var(--phosphor); font-weight:400; }
+
+  /* ---------- target list ---------- */
+  .target-list{
+    list-style:none; margin:0; padding:8px;
+    overflow-y:auto; flex:1;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .target-row{
+    display:flex; justify-content:space-between; align-items:center;
+    gap:10px;
+    padding:9px 11px;
+    border:1px solid var(--grid);
+    border-radius:2px;
+    background:var(--panel-raised);
+    cursor:pointer;
+    font-size:13px;
+  }
+  .target-row:hover{ border-color:var(--amber-dim); }
+  .target-row.selected{ border-color:var(--red); background:rgba(255,59,59,0.08); }
+  .target-row.neutralized{ opacity:0.4; }
+  .target-row .name{ color:var(--ink); font-family:var(--head); font-weight:600; letter-spacing:.5px; }
+  .target-row.neutralized .name{ text-decoration:line-through; }
+  .target-row .tag{
+    font-size:10px; letter-spacing:1px; text-transform:uppercase;
+    color:var(--ink-dim); border:1px solid var(--grid); padding:2px 6px; border-radius:2px;
+  }
+  .target-row .tag.hostile{ color:var(--red); border-color:var(--red-dim); }
+  .target-row .tag.done{ color:var(--phosphor); border-color:var(--phosphor-dim); }
+  .empty-hint{
+    padding:20px 14px; color:var(--ink-dim); font-size:12px; line-height:1.6;
+  }
+
+  /* ---------- mission log ---------- */
+  .log-list{
+    list-style:none; margin:0; padding:10px 12px;
+    overflow-y:auto; flex:1;
+    display:flex; flex-direction:column-reverse; gap:8px;
+    font-size:12px;
+  }
+  .log-entry{ line-height:1.5; border-left:2px solid var(--grid); padding-left:8px; }
+  .log-entry .t{ color:var(--ink-dim); margin-right:6px; }
+  .log-entry.action-shush{ border-color:var(--amber-dim); }
+  .log-entry.action-ban{ border-color:var(--red-dim); }
+  .log-entry.action-airstrike{ border-color:var(--red); }
+  .log-entry.action-nuke{ border-color:#ff00ea; }
+
+  .stat-strip{
+    display:grid; grid-template-columns:repeat(4,1fr);
+    border-top:1px solid var(--grid);
+  }
+  .stat-strip div{
+    padding:10px 6px; text-align:center; border-right:1px solid var(--grid);
+  }
+  .stat-strip div:last-child{ border-right:none; }
+  .stat-strip .n{ font-family:var(--head); font-size:18px; color:var(--amber); font-weight:700; }
+  .stat-strip .l{ font-size:9px; color:var(--ink-dim); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
+
+  /* ---------- control deck ---------- */
+  .deck{
+    grid-column:1/-1;
+    padding:16px 20px;
+  }
+  .deck-inner{
+    display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap;
+  }
+  .deck-target{
+    flex:1; min-width:220px;
+  }
+  .deck-target .label{ font-size:10px; letter-spacing:2px; color:var(--ink-dim); text-transform:uppercase; }
+  .deck-target .val{
+    font-family:var(--head); font-size:22px; font-weight:700; color:var(--red);
+    letter-spacing:1px;
+  }
+  .deck-target .val.none{ color:var(--ink-dim); font-size:15px; font-weight:600; }
+
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:10px; letter-spacing:1.5px; color:var(--ink-dim); text-transform:uppercase; }
+  select{
+    background:var(--panel-raised);
+    border:1px solid var(--grid);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:2px;
+    min-width:150px;
+  }
+  select:focus, .target-row:focus-visible, .blip:focus-visible, button:focus-visible{
+    outline:2px solid var(--amber); outline-offset:2px;
+  }
+  select:disabled{ opacity:.35; }
+
+  .action-checks{
+    display:flex; flex-wrap:wrap; gap:6px 16px;
+    background:var(--panel-raised);
+    border:1px solid var(--grid);
+    border-radius:2px;
+    padding:9px 12px;
+  }
+  .action-checks .chk{
+    display:flex; align-items:center; gap:6px;
+    font-size:13px; color:var(--ink);
+    cursor:pointer;
+  }
+  .action-checks input[type="checkbox"]{
+    accent-color:var(--amber);
+    width:14px; height:14px;
+    cursor:pointer;
+  }
+
+  .btn-launch{
+    font-family:var(--stencil);
+    font-size:15px;
+    letter-spacing:2px;
+    color:#100600;
+    background:linear-gradient(180deg, #ffd35a, var(--amber));
+    border:none;
+    padding:14px 26px;
+    border-radius:2px;
+    cursor:pointer;
+    box-shadow:0 0 22px rgba(255,180,0,0.35);
+    text-transform:uppercase;
+    transition:transform .1s ease;
+  }
+  .btn-launch:hover{ transform:translateY(-1px); }
+  .btn-launch:disabled{
+    background:#333; color:#777; box-shadow:none; cursor:not-allowed;
+  }
+
+  footer{
+    text-align:center; padding:22px; color:var(--ink-dim); font-size:11px; letter-spacing:1px;
+  }
+  footer b{ color:var(--amber); }
+
+  /* ---------- modal / operation sequence ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(2,4,3,0.85);
+    display:none; align-items:center; justify-content:center; z-index:1000;
+    backdrop-filter:blur(2px);
+  }
+  .modal-backdrop.open{ display:flex; }
+  .modal{
+    width:min(480px, 90vw);
+    background:var(--panel);
+    border:1px solid var(--amber-dim);
+    border-radius:4px;
+    padding:26px 26px 22px;
+    box-shadow:0 0 60px rgba(255,180,0,0.15);
+    position:relative;
+  }
+  .modal h2{
+    font-family:var(--stencil);
+    font-size:16px; letter-spacing:2px; color:var(--amber); margin:0 0 14px;
+  }
+  .modal p{ font-size:13px; color:var(--ink-dim); line-height:1.6; margin:0 0 18px; }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
+  .btn-cancel{
+    background:transparent; border:1px solid var(--grid); color:var(--ink-dim);
+    font-family:var(--head); font-size:12px; letter-spacing:1.5px; padding:9px 16px;
+    border-radius:2px; cursor:pointer; text-transform:uppercase;
+  }
+  .btn-confirm{
+    background:var(--red); border:1px solid var(--red); color:#1a0000;
+    font-family:var(--head); font-weight:700; font-size:12px; letter-spacing:1.5px; padding:9px 16px;
+    border-radius:2px; cursor:pointer; text-transform:uppercase;
+  }
+
+  .op-lines{
+    font-size:12px; line-height:1.9; color:var(--phosphor);
+    min-height:150px; max-height:220px; overflow-y:auto;
+  }
+  .op-lines .line{ opacity:0; animation:fadein .25s forwards; }
+  @keyframes fadein{ to{ opacity:1; } }
+  .op-lines .line.ok::before{ content:"✓ "; color:var(--phosphor); }
+  .progress-track{
+    height:8px; background:#0e1a14; border:1px solid var(--grid); border-radius:4px; overflow:hidden; margin:14px 0;
+  }
+  .progress-fill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--amber-dim), var(--amber));
+    transition:width .18s linear;
+  }
+  .result-stamp{
+    display:none;
+    text-align:center; padding:14px 0 4px;
+  }
+  .result-stamp.show{ display:block; animation:stampIn .35s ease-out; }
+  @keyframes stampIn{ from{ transform:scale(1.4) rotate(-6deg); opacity:0;} to{ transform:scale(1) rotate(-6deg); opacity:1;} }
+  .result-stamp .txt{
+    display:inline-block;
+    font-family:var(--stencil);
+    font-size:26px;
+    letter-spacing:3px;
+    color:var(--red);
+    border:3px solid var(--red);
+    padding:8px 18px;
+    transform:rotate(-6deg);
+    text-shadow:0 0 12px rgba(255,59,59,0.5);
+  }
+
+  .flash{
+    position:fixed; inset:0; background:var(--red); opacity:0; pointer-events:none; z-index:1001;
+  }
+  .flash.go{ animation:flashPulse .5s ease-out; }
+  @keyframes flashPulse{ 0%{opacity:0} 15%{opacity:.35} 100%{opacity:0} }
+
+  ::-webkit-scrollbar{ width:8px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:var(--grid); border-radius:4px; }
+</style>
+</head>
+<body>
+
+<div class="flash" id="flash"></div>
+
+<header>
+  <div class="brand">
+    <h1>FD SIMULATOR</h1>
+    <span class="sub">Tactical Moderation Suite — Not Affiliated With Anyone, Real Or Fictional</span>
+  </div>
+  <div class="hdr-right">
+    <div class="status-pill"><span class="dot"></span>Scope Active</div>
+    <div id="clock">--:--:--</div>
+    <button class="btn-ghost" id="soundToggle">🔊 Sound: On</button>
+  </div>
+</header>
+
+<main>
+  <!-- RADAR -->
+  <section class="panel">
+    <div class="panel-head">Radar Scope <span class="count" id="scanCount">0 contacts</span></div>
+    <div class="radar-wrap">
+      <div class="radar-scope" id="scope">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <div class="ring r4"></div>
+        <div class="crosshair h"></div>
+        <div class="crosshair v"></div>
+        <div class="sweep"></div>
+      </div>
+      <div class="radar-readout">
+        <div>MODE: <b>SEARCH</b></div>
+        <div>RANGE: <b>40nm</b></div>
+        <div>BEARING: <b id="bearingReadout">000°</b></div>
+        <div>NEXT SCAN: <b id="nextScan">--</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TARGET LIST -->
+  <section class="panel">
+    <div class="panel-head">Contacts <span class="count" id="targetCount">0</span></div>
+    <ul class="target-list" id="targetList"></ul>
+  </section>
+
+  <!-- MISSION LOG -->
+  <section class="panel">
+    <div class="panel-head">Mission Log</div>
+    <ul class="log-list" id="logList"></ul>
+    <div class="stat-strip">
+      <div><div class="n" id="statShush">0</div><div class="l">Shushed</div></div>
+      <div><div class="n" id="statBan">0</div><div class="l">Banned</div></div>
+      <div><div class="n" id="statStrike">0</div><div class="l">Strikes</div></div>
+      <div><div class="n" id="statNuke">0</div><div class="l">Nukes</div></div>
+    </div>
+  </section>
+
+  <!-- CONTROL DECK -->
+  <section class="panel deck">
+    <div class="deck-inner">
+      <div class="deck-target">
+        <div class="label">Selected Target</div>
+        <div class="val none" id="selectedName">No contact selected — pick one from the scope or list</div>
+      </div>
+
+      <div class="field" style="min-width:280px;">
+        <label>Actions (select any)</label>
+        <div class="action-checks">
+          <label class="chk"><input type="checkbox" class="action-cb" value="shush"> Shush</label>
+          <label class="chk"><input type="checkbox" class="action-cb" value="ban"> Ban</label>
+          <label class="chk"><input type="checkbox" class="action-cb" value="airstrike"> Direct Airstrike</label>
+          <label class="chk"><input type="checkbox" class="action-cb" value="nuke"> Nuclear Option</label>
+        </div>
+      </div>
+
+      <div class="field" id="shushOptions" style="display:none;">
+        <label for="shushDuration">Shush duration (weeks)</label>
+        <select id="shushDuration"></select>
+      </div>
+
+      <div class="field" id="banOptions" style="display:none;">
+        <label for="banDuration">Ban duration (months)</label>
+        <select id="banDuration"></select>
+      </div>
+
+      <div class="field" id="nukeOptions" style="display:none;">
+        <label for="yieldSelect">Yield</label>
+        <select id="yieldSelect">
+          <option>Tactical (0.3kt)</option>
+          <option>Strategic (150kt)</option>
+          <option selected>Tsar Bomba (50Mt)</option>
+          <option>Hiroshima</option>
+        </select>
+      </div>
+
+      <button class="btn-launch" id="launchBtn" disabled>Start Operation</button>
+    </div>
+  </section>
+</main>
+
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div id="confirmStage">
+      <h2 id="confirmTitle">Confirm Operation</h2>
+      <p id="confirmText">This action cannot be undone (except by refreshing the page).</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="cancelBtn">Abort</button>
+        <button class="btn-confirm" id="confirmBtn">Confirm</button>
+      </div>
+    </div>
+
+    <div id="opStage" style="display:none;">
+      <h2>Operation In Progress</h2>
+      <div class="op-lines" id="opLines"></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="result-stamp" id="resultStamp"><span class="txt" id="resultText">TARGET NEUTRALIZED</span></div>
+      <div class="modal-actions" id="closeActions" style="display:none;">
+        <button class="btn-cancel" id="closeBtn">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   ★★★ EDIT ME ★★★
+   This is the only list you need to change. Replace these
+   placeholder callsigns with whatever names you want the
+   radar to find. Order doesn't matter — they're shuffled.
+   ============================================================ */
+const GENERIC_TARGETS = [
+  "Rupnil", "Craw", "King Von", "water",
+  "Lazy", "trkl", "Gizzy, Goddess of Boykissers and Ducks QUACK and the best GOI ofc", "Koei",
+  "Matei sHomePage (No.1 PHP Lover)", "Keyboard1000n17", "thestarviper", "Fazin Ahamed",
+  "fentfemboy", "Lemong", "ethmarks", "fsh",
+  "swedishsplidney", "fentfemboy", "tejaswa4692", "f (larp)",
+  "Cereal Killer", "fireentity", "SeradedStripes Commits Gizzy Fraud also meoww", "Y0usaf3",
+  "zyluxXD", "Advay-CMD", "vihaanisthaan", "mixid-mbb",
+  "Flux3tor", "jam06452", "Vimthusiast"
+];
+
+/* ---------------- state ---------------- */
+let pool = shuffle([...GENERIC_TARGETS]);
+let targets = [];      // { id, name, x, y, neutralized, tag }
+let selectedId = null;
+let soundOn = true;
+let audioCtx = null;
+
+/* ---------------- helpers ---------------- */
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
+}
+function pad(n){ return n.toString().padStart(2,'0'); }
+function nowStr(){
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function beep(freq=440, dur=0.08, type='square', vol=0.05){
+  if(!soundOn) return;
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  }catch(e){ /* audio not available, fail silently */ }
+}
+
+/* ---------------- siren ---------------- */
+let sirenEl = null;
+function startSiren(){
+  if(!soundOn) return;
+  sirenEl = new Audio('siren.mp3'); // put your siren file next to this html, named siren.mp3
+  sirenEl.loop = true;
+  sirenEl.volume = 0.5;
+  sirenEl.play().catch(()=>{});
+}
+function stopSirenWithFade(){
+  if(!sirenEl) return;
+  const el = sirenEl;
+  const steps = 30, stepTime = 3000/steps;
+  let i = 0;
+  const startVol = el.volume;
+  const fade = setInterval(()=>{
+    i++;
+    el.volume = Math.max(0, startVol * (1 - i/steps));
+    if(i >= steps){
+      clearInterval(fade);
+      el.pause();
+      el.currentTime = 0;
+    }
+  }, stepTime);
+}
+
+/* ---------------- clock ---------------- */
+function tickClock(){
+  document.getElementById('clock').textContent = nowStr() + ' LOCAL';
+}
+setInterval(tickClock, 1000); tickClock();
+
+/* ---------------- radar bearing readout ---------------- */
+let bearing = 0;
+setInterval(()=>{
+  bearing = (bearing + 4) % 360;
+  document.getElementById('bearingReadout').textContent = pad(Math.round(bearing)).padStart(3,'0') + '°';
+}, 60);
+
+/* ---------------- scanning ---------------- */
+const scope = document.getElementById('scope');
+const MAX_ACTIVE = 4;
+let nextScanIn = 8;
+let scanTimer = null;
+
+function scheduleScan(){
+  clearTimeout(scanTimer);
+  const activeCount = targets.filter(t=>!t.neutralized).length;
+
+  if(activeCount >= MAX_ACTIVE){
+    // scope is full — wait, then re-check, rather than spawning
+    document.getElementById('nextScan').textContent = 'holding';
+    scanTimer = setTimeout(scheduleScan, 1000);
+    return;
+  }
+
+  nextScanIn = 5 + Math.random()*35; // 5s - 40s
+  const start = performance.now();
+  function frame(now){
+    const remain = Math.max(0, nextScanIn - (now-start)/1000);
+    document.getElementById('nextScan').textContent = remain.toFixed(1) + 's';
+    if(remain > 0){ requestAnimationFrame(frame); }
+  }
+  requestAnimationFrame(frame);
+  scanTimer = setTimeout(spawnContact, nextScanIn*1000);
+}
+
+function spawnContact(){
+  const activeCount = targets.filter(t=>!t.neutralized).length;
+  if(activeCount >= MAX_ACTIVE){ scheduleScan(); return; }
+  if(pool.length === 0){ pool = shuffle([...GENERIC_TARGETS]); }
+  const name = pool.pop();
+
+  // random position inside the circle (polar coords, keep off dead-center)
+  const angle = Math.random()*Math.PI*2;
+  const r = 0.18 + Math.random()*0.42; // fraction of radius
+  const x = 50 + Math.cos(angle)*r*50;
+  const y = 50 + Math.sin(angle)*r*50;
+
+  const id = 't' + Date.now() + Math.floor(Math.random()*1000);
+  const tag = Math.random() < 0.3 ? 'hostile' : 'unknown';
+  const target = { id, name, x, y, neutralized:false, tag };
+  targets.push(target);
+  renderBlip(target);
+  renderTargetList();
+  document.getElementById('scanCount').textContent = targets.filter(t=>!t.neutralized).length + ' contacts';
+  beep(880, 0.06, 'square', 0.04);
+
+  scheduleScan();
+}
+
+function renderBlip(t){
+  const el = document.createElement('div');
+  el.className = 'blip';
+  el.style.left = t.x + '%';
+  el.style.top = t.y + '%';
+  el.dataset.id = t.id;
+  el.title = t.name;
+  el.tabIndex = 0;
+  el.addEventListener('click', ()=> selectTarget(t.id));
+  el.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' ') selectTarget(t.id); });
+  scope.appendChild(el);
+}
+
+/* ---------------- target list ---------------- */
+function renderTargetList(){
+  const list = document.getElementById('targetList');
+  list.innerHTML = '';
+  document.getElementById('targetCount').textContent = targets.length;
+
+  if(targets.length === 0){
+    list.innerHTML = '<div class="empty-hint">Scope is warming up. Contacts will appear here as the radar finds them.</div>';
+    return;
+  }
+
+  // most recent first
+  [...targets].reverse().forEach(t=>{
+    const li = document.createElement('li');
+    li.className = 'target-row' + (t.id===selectedId?' selected':'') + (t.neutralized?' neutralized':'');
+    li.tabIndex = 0;
+    li.innerHTML = `<span class="name">${t.name}</span><span class="tag ${t.neutralized?'done':t.tag}">${t.neutralized?'Neutralized':t.tag}</span>`;
+    li.addEventListener('click', ()=> selectTarget(t.id));
+    li.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' ') selectTarget(t.id); });
+    list.appendChild(li);
+  });
+}
+
+function selectTarget(id){
+  const t = targets.find(x=>x.id===id);
+  if(!t || t.neutralized) return;
+  selectedId = id;
+  beep(220,0.05,'triangle',0.05);
+
+  document.querySelectorAll('.blip').forEach(b=>{
+    b.classList.toggle('selected', b.dataset.id===id);
+  });
+  renderTargetList();
+
+  const nameEl = document.getElementById('selectedName');
+  nameEl.textContent = t.name;
+  nameEl.classList.remove('none');
+  refreshLaunchState();
+}
+
+/* ---------------- action checkboxes ---------------- */
+const actionCbs = document.querySelectorAll('.action-cb');
+const shushOptions = document.getElementById('shushOptions');
+const banOptions = document.getElementById('banOptions');
+const nukeOptions = document.getElementById('nukeOptions');
+const shushDuration = document.getElementById('shushDuration');
+const banDuration = document.getElementById('banDuration');
+
+// populate the week/month dropdowns once
+for(let i=1;i<=8;i++){
+  shushDuration.innerHTML += `<option value="${i}w">${i} week${i>1?'s':''}</option>`;
+}
+shushDuration.innerHTML += `<option value="indef">Indefinitely</option>`;
+
+for(let i=1;i<=12;i++){
+  banDuration.innerHTML += `<option value="${i}m">${i} month${i>1?'s':''}</option>`;
+}
+banDuration.innerHTML += `<option value="indef">Indefinitely</option>`;
+
+function getSelectedActions(){
+  return [...actionCbs].filter(cb=>cb.checked).map(cb=>cb.value);
+}
+
+function updateActionFields(){
+  const selected = getSelectedActions();
+  shushOptions.style.display = selected.includes('shush') ? 'flex' : 'none';
+  banOptions.style.display = selected.includes('ban') ? 'flex' : 'none';
+  nukeOptions.style.display = selected.includes('nuke') ? 'flex' : 'none';
+  refreshLaunchState();
+}
+actionCbs.forEach(cb => cb.addEventListener('change', updateActionFields));
+
+function refreshLaunchState(){
+  const hasTarget = !!selectedId;
+  const hasAction = getSelectedActions().length > 0;
+  document.getElementById('launchBtn').disabled = !(hasTarget && hasAction);
+}
+
+/* ---------------- launch flow ---------------- */
+const modalBackdrop = document.getElementById('modalBackdrop');
+const confirmStage = document.getElementById('confirmStage');
+const opStage = document.getElementById('opStage');
+const opLines = document.getElementById('opLines');
+const progressFill = document.getElementById('progressFill');
+const resultStamp = document.getElementById('resultStamp');
+const resultText = document.getElementById('resultText');
+const closeActions = document.getElementById('closeActions');
+const flash = document.getElementById('flash');
+
+document.getElementById('launchBtn').addEventListener('click', ()=>{
+  if(!selectedId) return;
+  const t = targets.find(x=>x.id===selectedId);
+  const actions = getSelectedActions();
+  if(actions.length === 0) return;
+
+  const labels = {
+    shush:'shush', ban:'ban', airstrike:'airstrike', nuke:'nuke'
+  };
+  const actionList = actions.map(a=>labels[a]).join(' + ');
+
+  document.getElementById('confirmTitle').textContent =
+    actions.includes('nuke') ? 'Confirm Nuclear Launch' : 'Confirm Operation';
+  document.getElementById('confirmText').textContent =
+    `You are about to run [${actionList}] on "${t.name}". This is a simulation — nothing outside this browser tab will happen. Proceed?`;
+
+  confirmStage.style.display = 'block';
+  opStage.style.display = 'none';
+  resultStamp.classList.remove('show');
+  closeActions.style.display = 'none';
+  modalBackdrop.classList.add('open');
+});
+
+document.getElementById('cancelBtn').addEventListener('click', ()=> modalBackdrop.classList.remove('open'));
+document.getElementById('closeBtn').addEventListener('click', ()=> modalBackdrop.classList.remove('open'));
+modalBackdrop.addEventListener('click', (e)=>{ if(e.target===modalBackdrop) modalBackdrop.classList.remove('open'); });
+
+document.getElementById('confirmBtn').addEventListener('click', runOperation);
+
+const OP_SEQUENCES = {
+  shush: [
+    'Establishing uplink to moderation console',
+    'Locating target in voice/text channels',
+    'Applying timeout flag',
+    'Muting target across all channels',
+    'Logging action to audit trail'
+  ],
+  ban: [
+    'Establishing uplink to moderation console',
+    'Verifying target identity',
+    'Revoking channel access',
+    'Issuing ban record',
+    'Logging action to audit trail'
+  ],
+  airstrike: [
+    'Requesting airspace clearance',
+    'Acquiring target lock',
+    'Arming payload',
+    'Bomb bay doors open',
+    'Ordnance away',
+    'Impact confirmed'
+  ],
+  nuke: [
+    'Authenticating launch codes',
+    'Spinning up silo',
+    'Acquiring target lock',
+    'Arming warhead',
+    'Removing safety interlocks',
+    'Launch',
+    'Detonation confirmed'
+  ]
+};
+
+function runOperation(){
+  const t = targets.find(x=>x.id===selectedId);
+  const actions = getSelectedActions();
+  const duration = shushDuration.value;
+  const banDur = banDuration.value;
+  const yieldVal = document.getElementById('yieldSelect').value;
+
+  confirmStage.style.display = 'none';
+  opStage.style.display = 'block';
+  startSiren();
+  opLines.innerHTML = '';
+  progressFill.style.width = '0%';
+  resultStamp.classList.remove('show');
+  closeActions.style.display = 'none';
+
+  // combine the sequences of every selected action, in a fixed order
+  const order = ['shush','ban','airstrike','nuke'];
+  const seq = [];
+  order.forEach(a=>{
+    if(actions.includes(a)) seq.push(...OP_SEQUENCES[a]);
+  });
+
+  let i = 0;
+
+  if(actions.includes('nuke') || actions.includes('airstrike')){
+    flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
+    beep(120, 0.4, 'sawtooth', 0.08);
+  }
+
+  function step(){
+    if(i < seq.length){
+      const line = document.createElement('div');
+      line.className = 'line ok';
+      line.textContent = seq[i];
+      opLines.appendChild(line);
+      opLines.scrollTop = opLines.scrollHeight;
+      progressFill.style.width = Math.round(((i+1)/seq.length)*100) + '%';
+      beep(400 + i*40, 0.05, 'square', 0.03);
+      i++;
+      setTimeout(step, 320 + Math.random()*220);
+    } else {
+      finishOperation();
+    }
+  }
+  step();
+
+  function finishOperation(){
+    t.neutralized = true;
+    stopSirenWithFade();
+    selectedId = null;
+
+    document.querySelectorAll(`.blip[data-id="${t.id}"]`).forEach(b=> b.classList.add('neutralized'));
+    renderTargetList();
+    document.getElementById('scanCount').textContent = targets.filter(x=>!x.neutralized).length + ' contacts';
+
+    document.getElementById('selectedName').textContent = 'No contact selected — pick one from the scope or list';
+    document.getElementById('selectedName').classList.add('none');
+    document.getElementById('launchBtn').disabled = true;
+
+    // regardless of which actions ran, the operation always ends the same way
+    resultText.textContent = 'TARGET NEUTRALIZED';
+    resultStamp.classList.add('show');
+    closeActions.style.display = 'flex';
+    beep(660, 0.15, 'square', 0.06);
+
+    addLogEntry(t, actions, duration, banDur, yieldVal);
+    actions.forEach(bumpStat);
+
+    // reset the action panel for the next operation
+    actionCbs.forEach(cb => cb.checked = false);
+    updateActionFields();
+  }
+}
+
+function addLogEntry(t, actions, duration, banDur, yieldVal){
+  const log = document.getElementById('logList');
+  const verb = { shush:'Shushed', ban:'Banned', airstrike:'Airstruck', nuke:'Nuked' };
+
+  const parts = actions.map(a=>{
+    let detail = '';
+    if(a==='shush') detail = ` (${duration==='indef' ? 'indefinitely' : duration.replace('w',' week(s)')})`;
+    if(a==='ban') detail = ` (${banDur==='indef' ? 'indefinitely' : banDur.replace('m',' month(s)')})`;
+    if(a==='nuke') detail = ` (${yieldVal})`;
+    return verb[a] + detail;
+  });
+
+  const li = document.createElement('li');
+  li.className = 'log-entry action-' + actions[actions.length-1];
+  li.innerHTML = `<span class="t">[${nowStr()}]</span>${parts.join(' + ')} <b>${t.name}</b> — result: neutralized`;
+  log.appendChild(li);
+}
+
+function bumpStat(action){
+  const map = { shush:'statShush', ban:'statBan', airstrike:'statStrike', nuke:'statNuke' };
+  const el = document.getElementById(map[action]);
+  el.textContent = parseInt(el.textContent,10) + 1;
+}
+
+/* ---------------- sound toggle ---------------- */
+document.getElementById('soundToggle').addEventListener('click', (e)=>{
+  soundOn = !soundOn;
+  e.target.textContent = soundOn ? '🔊 Sound: On' : '🔇 Sound: Off';
+});
+
+/* ---------------- boot ---------------- */
+renderTargetList();
+spawnContact();
+</script>
+
+</body>
+</html>
